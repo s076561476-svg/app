@@ -1,0 +1,17 @@
+{
+  "name": "智能學習助手",
+  "short_name": "學習助手",
+  "description": "全方位的 AI 與 IoT 智能學習夥伴",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F0F4F8",
+  "theme_color": "#6366F1",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3468/3468306.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
