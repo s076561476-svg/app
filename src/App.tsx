@@ -1,18 +1,21 @@
-import { 
-  Search, 
-  Image as ImageIcon, 
-  Lightbulb, 
-  Code, 
+import {
+  Search,
+  Image as ImageIcon,
+  Lightbulb,
+  Code,
   MessageSquare,
   Home,
   Wrench,
   BookOpen,
   Share2,
   User,
-  ChevronLeft
+  ChevronLeft,
+  LogOut,
+  LogIn
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
+import { getUser, oauthLogin, logout, handleAuthCallback, onAuthChange, type User as NetlifyUser, AuthError, MissingIdentityError } from '@netlify/identity';
 
 type ViewType = 'home' | 'ai-tools' | 'iot' | 'workshop' | 'forum' | 'current-ai-tools' | 'iot-applications' | 'profile';
 
@@ -22,6 +25,35 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
+  const [user, setUser] = useState<NetlifyUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const result = await handleAuthCallback();
+        if (result?.type === 'oauth') {
+          setUser(result.user ?? null);
+        }
+      } catch (_) {
+        // no callback hash present, that's fine
+      }
+      try {
+        const currentUser = await getUser();
+        setUser(currentUser);
+      } catch (_) {
+        setUser(null);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    init();
+
+    const unsubscribe = onAuthChange((_event, updatedUser) => {
+      setUser(updatedUser ?? null);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleSend = () => {
     if (!chatMessage.trim()) return;
@@ -140,8 +172,8 @@ export default function App() {
             </main>
           </motion.div>
         ) : (
-          <DetailView 
-            view={currentView} 
+          <DetailView
+            view={currentView}
             onBack={() => {
               if (currentView === 'current-ai-tools') {
                 setCurrentView('ai-tools');
@@ -150,8 +182,10 @@ export default function App() {
               } else {
                 setCurrentView('home');
               }
-            }} 
+            }}
             onNavigate={(view) => setCurrentView(view)}
+            user={user}
+            authLoading={authLoading}
           />
         )}
       </AnimatePresence>
@@ -290,7 +324,7 @@ function Gauge({ percentage }: { percentage: number }) {
   );
 }
 
-function DetailView({ view, onBack, onNavigate }: { view: ViewType, onBack: () => void, onNavigate: (view: ViewType) => void }) {
+function DetailView({ view, onBack, onNavigate, user, authLoading }: { view: ViewType, onBack: () => void, onNavigate: (view: ViewType) => void, user: NetlifyUser | null, authLoading: boolean }) {
   const configs: Record<Exclude<ViewType, 'home'>, { title: string, color: string, icon: ReactNode }> = {
     'ai-tools': { title: 'AI 教室', color: 'vibrant-gradient', icon: <ImageIcon size={24} /> },
     'iot': { title: 'IoT 教室', color: 'bg-cyan-500', icon: <Lightbulb size={24} /> },
@@ -343,63 +377,7 @@ function DetailView({ view, onBack, onNavigate }: { view: ViewType, onBack: () =
           </div>
           
           {view === 'profile' ? (
-            <div className="space-y-6">
-              <div className="bg-white rounded-[32px] p-6 shadow-card border border-white flex flex-col items-center">
-                <div className="w-24 h-24 rounded-full bg-vibrant-indigo flex items-center justify-center text-white text-4xl font-black shadow-lg mb-4 ring-4 ring-vibrant-indigo/10">
-                  U
-                </div>
-                <h3 className="text-xl font-black text-slate-800">超級學習者</h3>
-                <p className="text-slate-400 text-sm">初級 IoT 探索者</p>
-                
-                <div className="grid grid-cols-3 w-full gap-4 mt-8">
-                  <div className="text-center">
-                    <p className="text-2xl font-black text-vibrant-indigo">12</p>
-                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">已完成</p>
-                  </div>
-                  <div className="text-center border-x border-slate-100">
-                    <p className="text-2xl font-black text-vibrant-orange">850</p>
-                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">積分</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-black text-green-500">5</p>
-                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">徽章</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h4 className="px-2 text-sm font-black text-slate-400 uppercase tracking-widest">我的學習</h4>
-                <div className="bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-100">
-                  <div className="p-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer">
-                    <BookOpen size={20} className="text-vibrant-indigo" />
-                    <span className="flex-1 font-bold text-slate-700">正在進行的課程</span>
-                    <span className="bg-vibrant-indigo text-white text-[10px] px-2 py-0.5 rounded-full font-black">2</span>
-                  </div>
-                  <div className="p-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer">
-                    <Code size={20} className="text-green-500" />
-                    <span className="flex-1 font-bold text-slate-700">我的作品集</span>
-                  </div>
-                  <div className="p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
-                    <Share2 size={20} className="text-vibrant-orange" />
-                    <span className="flex-1 font-bold text-slate-700">收藏的專案</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h4 className="px-2 text-sm font-black text-slate-400 uppercase tracking-widest">設定與支援</h4>
-                <div className="bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-100">
-                  <div className="p-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer">
-                    <Wrench size={20} className="text-slate-400" />
-                    <span className="flex-1 font-bold text-slate-700">帳號設定</span>
-                  </div>
-                  <div className="p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
-                    <MessageSquare size={20} className="text-slate-400" />
-                    <span className="flex-1 font-bold text-slate-700">聯絡我們</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ProfileSection user={user} authLoading={authLoading} />
           ) : view === 'workshop' ? (
             <div className="grid grid-cols-1 gap-6">
               {[
@@ -726,6 +704,172 @@ function DetailView({ view, onBack, onNavigate }: { view: ViewType, onBack: () =
         </div>
       </main>
     </motion.div>
+  );
+}
+
+function ProfileSection({ user, authLoading }: { user: NetlifyUser | null; authLoading: boolean }) {
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleGoogleLogin = () => {
+    setAuthError(null);
+    try {
+      oauthLogin('google');
+    } catch (err) {
+      if (err instanceof MissingIdentityError) {
+        setAuthError('身份驗證服務未啟用，請聯絡管理員。');
+      } else if (err instanceof AuthError) {
+        setAuthError(err.message);
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } catch (_) {
+      // ignore
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-vibrant-indigo/20 border-t-vibrant-indigo rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        <div className="bg-white rounded-[32px] p-8 shadow-card border border-white flex flex-col items-center text-center">
+          <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-6 ring-4 ring-slate-50">
+            <User size={40} />
+          </div>
+          <h3 className="text-xl font-black text-slate-800 mb-2">登入以查看個人檔案</h3>
+          <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+            使用 Google 帳號登入，記錄你的學習進度與成就。
+          </p>
+
+          {authError && (
+            <div className="w-full mb-4 p-4 bg-red-50 text-red-600 text-sm rounded-2xl font-medium">
+              {authError}
+            </div>
+          )}
+
+          <button
+            onClick={handleGoogleLogin}
+            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 rounded-2xl py-4 px-6 font-bold text-slate-700 hover:border-vibrant-indigo hover:text-vibrant-indigo transition-all shadow-sm active:scale-[0.98]"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            使用 Google 帳號登入
+          </button>
+
+          <p className="mt-4 text-[10px] text-slate-400 leading-relaxed px-4">
+            登入即表示你同意我們的服務條款與隱私政策。請使用系統瀏覽器開啟本頁面以完成 Google 登入。
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  const displayName = (user.userMetadata?.full_name as string | undefined) ?? user.email ?? '學習者';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
+  const avatarUrl = user.userMetadata?.avatar_url as string | undefined;
+
+  return (
+    <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white rounded-[32px] p-6 shadow-card border border-white flex flex-col items-center"
+      >
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={displayName}
+            referrerPolicy="no-referrer"
+            className="w-24 h-24 rounded-full object-cover shadow-lg mb-4 ring-4 ring-vibrant-indigo/10"
+          />
+        ) : (
+          <div className="w-24 h-24 rounded-full bg-vibrant-indigo flex items-center justify-center text-white text-4xl font-black shadow-lg mb-4 ring-4 ring-vibrant-indigo/10">
+            {avatarLetter}
+          </div>
+        )}
+        <h3 className="text-xl font-black text-slate-800">{displayName}</h3>
+        <p className="text-slate-400 text-sm">{user.email}</p>
+
+        <div className="grid grid-cols-3 w-full gap-4 mt-8">
+          <div className="text-center">
+            <p className="text-2xl font-black text-vibrant-indigo">12</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">已完成</p>
+          </div>
+          <div className="text-center border-x border-slate-100">
+            <p className="text-2xl font-black text-vibrant-orange">850</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">積分</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-green-500">5</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">徽章</p>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="space-y-3">
+        <h4 className="px-2 text-sm font-black text-slate-400 uppercase tracking-widest">我的學習</h4>
+        <div className="bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-100">
+          <div className="p-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer">
+            <BookOpen size={20} className="text-vibrant-indigo" />
+            <span className="flex-1 font-bold text-slate-700">正在進行的課程</span>
+            <span className="bg-vibrant-indigo text-white text-[10px] px-2 py-0.5 rounded-full font-black">2</span>
+          </div>
+          <div className="p-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer">
+            <Code size={20} className="text-green-500" />
+            <span className="flex-1 font-bold text-slate-700">我的作品集</span>
+          </div>
+          <div className="p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
+            <Share2 size={20} className="text-vibrant-orange" />
+            <span className="flex-1 font-bold text-slate-700">收藏的專案</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h4 className="px-2 text-sm font-black text-slate-400 uppercase tracking-widest">設定與支援</h4>
+        <div className="bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-100">
+          <div className="p-4 flex items-center gap-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer">
+            <Wrench size={20} className="text-slate-400" />
+            <span className="flex-1 font-bold text-slate-700">帳號設定</span>
+          </div>
+          <div className="p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
+            <MessageSquare size={20} className="text-slate-400" />
+            <span className="flex-1 font-bold text-slate-700">聯絡我們</span>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={handleLogout}
+        disabled={isLoggingOut}
+        className="w-full flex items-center justify-center gap-2 py-4 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 transition-colors active:scale-[0.98] disabled:opacity-50"
+      >
+        <LogOut size={18} />
+        {isLoggingOut ? '登出中...' : '登出'}
+      </button>
+    </div>
   );
 }
 
